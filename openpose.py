@@ -2,79 +2,128 @@
 # export LD_LIBRARY_PATH=/opt/intel/deeplearning_deploymenttoolkit/deployment_tools/external/mklml_lnx/lib:$LD_LIBRARY_PATH
 import cv2 as cv
 import numpy as np
-import argparse
+import argparse, os
+import os
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--input', help='Path to image or video. Skip to capture frames from camera')
-parser.add_argument('--thr', default=0.2, type=float, help='Threshold value for pose parts heat map')
-parser.add_argument('--width', default=368, type=int, help='Resize input to specific width.')
-parser.add_argument('--height', default=368, type=int, help='Resize input to specific height.')
+#from sympy.codegen.ast import continue_
+from FolderLoader import ImageFolderLoader, VideoFolderLoader
 
-args = parser.parse_args()
+def main():
 
-BODY_PARTS = { "Nose": 0, "Neck": 1, "RShoulder": 2, "RElbow": 3, "RWrist": 4,
-               "LShoulder": 5, "LElbow": 6, "LWrist": 7, "RHip": 8, "RKnee": 9,
-               "RAnkle": 10, "LHip": 11, "LKnee": 12, "LAnkle": 13, "REye": 14,
-               "LEye": 15, "REar": 16, "LEar": 17, "Background": 18 }
 
-POSE_PAIRS = [ ["Neck", "RShoulder"], ["Neck", "LShoulder"], ["RShoulder", "RElbow"],
-               ["RElbow", "RWrist"], ["LShoulder", "LElbow"], ["LElbow", "LWrist"],
-               ["Neck", "RHip"], ["RHip", "RKnee"], ["RKnee", "RAnkle"], ["Neck", "LHip"],
-               ["LHip", "LKnee"], ["LKnee", "LAnkle"], ["Neck", "Nose"], ["Nose", "REye"],
-               ["REye", "REar"], ["Nose", "LEye"], ["LEye", "LEar"] ]
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input', help='Path to image or video. Skip to capture frames from camera')
+    parser.add_argument('--thr', default=0.2, type=float, help='Threshold value for pose parts heat map')
+    parser.add_argument('--width', default=368, type=int, help='Resize input to specific width.')
+    parser.add_argument('--height', default=368, type=int, help='Resize input to specific height.')
 
-inWidth = args.width
-inHeight = args.height
+    args = parser.parse_args()
 
-net = cv.dnn.readNetFromTensorflow("graph_opt.pb")
+    BODY_PARTS = {"Nose": 0, "Neck": 1, "RShoulder": 2, "RElbow": 3, "RWrist": 4,
+                  "LShoulder": 5, "LElbow": 6, "LWrist": 7, "RHip": 8, "RKnee": 9,
+                  "RAnkle": 10, "LHip": 11, "LKnee": 12, "LAnkle": 13, "REye": 14,
+                  "LEye": 15, "REar": 16, "LEar": 17, "Background": 18}
 
-cap = cv.VideoCapture(args.input if args.input else 0)
+    POSE_PAIRS = [["Neck", "RShoulder"], ["Neck", "LShoulder"], ["RShoulder", "RElbow"],
+                  ["RElbow", "RWrist"], ["LShoulder", "LElbow"], ["LElbow", "LWrist"],
+                  ["Neck", "RHip"], ["RHip", "RKnee"], ["RKnee", "RAnkle"], ["Neck", "LHip"],
+                  ["LHip", "LKnee"], ["LKnee", "LAnkle"], ["Neck", "Nose"], ["Nose", "REye"],
+                  ["REye", "REar"], ["Nose", "LEye"], ["LEye", "LEar"]]
 
-while cv.waitKey(1) < 0:
-    hasFrame, frame = cap.read()
-    if not hasFrame:
-        cv.waitKey()
-        break
+    inWidth = args.width
+    inHeight = args.height
 
-    frameWidth = frame.shape[1]
-    frameHeight = frame.shape[0]
-    
-    net.setInput(cv.dnn.blobFromImage(frame, 1.0, (inWidth, inHeight), (127.5, 127.5, 127.5), swapRB=True, crop=False))
-    out = net.forward()
-    out = out[:, :19, :, :]  # MobileNet output [1, 57, -1, -1], we only need the first 19 elements
+    net = cv.dnn.readNetFromTensorflow("graph_opt.pb")
 
-    assert(len(BODY_PARTS) == out.shape[1])
+    folder_path = "Images"
+    image_loader = ImageFolderLoader(folder_path)
+    video_loader = VideoFolderLoader(folder_path)
 
-    points = []
-    for i in range(len(BODY_PARTS)):
-        # Slice heatmap of corresponging body's part.
-        heatMap = out[0, i, :, :]
+    for folder_loader in [image_loader, video_loader]:
+        if isinstance(folder_loader, VideoFolderLoader):
+            for frame, video_path in folder_loader:
+                cap = cv.VideoCapture(video_path)
 
-        # Originally, we try to find all the local maximums. To simplify a sample
-        # we just find a global one. However only a single pose at the same time
-        # could be detected this way.
-        _, conf, _, point = cv.minMaxLoc(heatMap)
-        x = (frameWidth * point[0]) / out.shape[3]
-        y = (frameHeight * point[1]) / out.shape[2]
-        # Add a point if it's confidence is higher than threshold.
-        points.append((int(x), int(y)) if conf > args.thr else None)
+                if not cap.isOpened():
+                    print("Error: Cannot open video.")
+                    exit()
 
-    for pair in POSE_PAIRS:
-        partFrom = pair[0]
-        partTo = pair[1]
-        assert(partFrom in BODY_PARTS)
-        assert(partTo in BODY_PARTS)
 
-        idFrom = BODY_PARTS[partFrom]
-        idTo = BODY_PARTS[partTo]
+                while True:
+                    ret, frame = cap.read()
+                    if not ret:
+                        break  # End of video
 
-        if points[idFrom] and points[idTo]:
-            cv.line(frame, points[idFrom], points[idTo], (0, 255, 0), 3)
-            cv.ellipse(frame, points[idFrom], (3, 3), 0, 0, 360, (0, 0, 255), cv.FILLED)
-            cv.ellipse(frame, points[idTo], (3, 3), 0, 0, 360, (0, 0, 255), cv.FILLED)
+                    frameWidth = frame.shape[1]
+                    frameHeight = frame.shape[0]
 
-    t, _ = net.getPerfProfile()
-    freq = cv.getTickFrequency() / 1000
-    cv.putText(frame, '%.2fms' % (t / freq), (10, 20), cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0))
+                    net.setInput(cv.dnn.blobFromImage(frame, 1.0, (inWidth, inHeight),
+                                                      (127.5, 127.5, 127.5), swapRB=True, crop=False))
+                    out = net.forward()
+                    out = out[:, :19, :, :]
 
-    cv.imshow('OpenPose using OpenCV', frame)
+                    points = []
+                    for i in range(len(BODY_PARTS)):
+                        heatMap = out[0, i, :, :]
+                        _, conf, _, point = cv.minMaxLoc(heatMap)
+                        x = (frameWidth * point[0]) / out.shape[3]
+                        y = (frameHeight * point[1]) / out.shape[2]
+                        points.append((int(x), int(y)) if conf > args.thr else None)
+
+                    for pair in POSE_PAIRS:
+                        idFrom = BODY_PARTS[pair[0]]
+                        idTo = BODY_PARTS[pair[1]]
+                        if points[idFrom] and points[idTo]:
+                            cv.line(frame, points[idFrom], points[idTo], (0, 255, 0), 3)
+                            cv.ellipse(frame, points[idFrom], (3, 3), 0, 0, 360, (0, 0, 255), cv.FILLED)
+                            cv.ellipse(frame, points[idTo], (3, 3), 0, 0, 360, (0, 0, 255), cv.FILLED)
+
+                    t, _ = net.getPerfProfile()
+                    freq = cv.getTickFrequency() / 1000
+                    cv.putText(frame, '%.2fms' % (t / freq), (10, 20), cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0))
+
+                    cv.imshow('OpenPose using OpenCV', frame)
+
+                    if cv.waitKey(1) & 0xFF == 27:  # ESC key to exit
+                        break
+
+                cap.release()
+                cv.destroyAllWindows()
+
+        # able to view images in a folder with model
+        if isinstance(folder_loader, ImageFolderLoader):
+            for frame, path in folder_loader:
+                frameWidth = frame.shape[1]
+                frameHeight = frame.shape[0]
+
+                net.setInput(cv.dnn.blobFromImage(frame, 1.0, (inWidth, inHeight),
+                                                  (127.5, 127.5, 127.5), swapRB=True, crop=False))
+                out = net.forward()
+                out = out[:, :19, :, :]
+
+                points = []
+                for i in range(len(BODY_PARTS)):
+                    heatMap = out[0, i, :, :]
+                    _, conf, _, point = cv.minMaxLoc(heatMap)
+                    x = (frameWidth * point[0]) / out.shape[3]
+                    y = (frameHeight * point[1]) / out.shape[2]
+                    points.append((int(x), int(y)) if conf > args.thr else None)
+
+                for pair in POSE_PAIRS:
+                    idFrom = BODY_PARTS[pair[0]]
+                    idTo = BODY_PARTS[pair[1]]
+                    if points[idFrom] and points[idTo]:
+                        cv.line(frame, points[idFrom], points[idTo], (0, 255, 0), 3)
+                        cv.ellipse(frame, points[idFrom], (3, 3), 0, 0, 360, (0, 0, 255), cv.FILLED)
+                        cv.ellipse(frame, points[idTo], (3, 3), 0, 0, 360, (0, 0, 255), cv.FILLED)
+
+                t, _ = net.getPerfProfile()
+                freq = cv.getTickFrequency() / 1000
+                cv.putText(frame, '%.2fms' % (t / freq), (10, 20), cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0))
+
+                cv.imshow('OpenPose using OpenCV', frame)
+                if cv.waitKey(0) & 0xFF == 27:  # wait for ESC key to go to next image / exit
+                    break
+
+if __name__ == '__main__':
+    main()
