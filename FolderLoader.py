@@ -1,6 +1,8 @@
 import os
 import cv2 as cv
 
+
+# this loads a folder searching for either video or images
 class FolderLoader:
     def __init__(self, folder_path):
         self.index = 0
@@ -51,7 +53,7 @@ class VideoFolderLoader(FolderLoader):
                 self.cap = None
                 continue  # move to next video
 
-            return frame, self.video_files[self.index]
+            return frame, self.video_files[self.index - 1]
 
     def __repr__(self):
         return "Video Loader"

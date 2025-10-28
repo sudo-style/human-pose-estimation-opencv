@@ -9,8 +9,6 @@ import os
 from FolderLoader import ImageFolderLoader, VideoFolderLoader
 
 def main():
-
-
     parser = argparse.ArgumentParser()
     parser.add_argument('--input', help='Path to image or video. Skip to capture frames from camera')
     parser.add_argument('--thr', default=0.2, type=float, help='Threshold value for pose parts heat map')
@@ -36,6 +34,7 @@ def main():
     net = cv.dnn.readNetFromTensorflow("graph_opt.pb")
 
     folder_path = "Images"
+    video_folder = "Images/body segmentation and gesturere cognition cleaned/training_data/gesture_training_data-001/gesture_data/hand_fand"
     image_loader = ImageFolderLoader(folder_path)
     video_loader = VideoFolderLoader(folder_path)
 
