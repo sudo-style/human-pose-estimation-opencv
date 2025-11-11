@@ -14,7 +14,8 @@ def get_keypoints(model, vid_path, gesture_id=0):
         save=False,
         show=False,
         conf=0.5,
-        verbose=False
+        verbose=False,
+        stream=True,
     )
 
     kps = []
@@ -53,13 +54,13 @@ def main():
     model = YOLO("yolo11n-pose.pt", verbose=False)
 
     # path to folder wanting to get poses
-    folder_path = "Images/small"
+    folder_path = "Images/body segmentation and gesturere cognition cleaned"
 
     # get list of gesture folders
     gesture_names = [g for g in os.listdir(folder_path) if g != ".DS_Store"]
 
     # output JSON file
-    output_json = Path("pose_data.json")
+    output_json = Path("pose_data.jsonl")
 
     videos_done = 0
 
@@ -69,12 +70,13 @@ def main():
         for gesture_name in gesture_names
     )
 
+    batch_entries = []
+
     # load existing data if file already exists
     if output_json.exists():
         with open(output_json, "r") as f:
             all_entries = json.load(f)
-    else:
-        all_entries = []
+    else: all_entries = []
 
     for gesture_id, gesture in enumerate(gesture_names):
         gesture_path = os.path.join(folder_path, gesture)
@@ -84,24 +86,29 @@ def main():
             vid_path = os.path.join(gesture_path, vid)
             print(f"Processing: gesture={gesture}, video={vid}")
 
-            pose_sequence = get_keypoints(
-                model=model,
-                vid_path=vid_path,
-                gesture_id=gesture_id
-            )
-
-            # append each video entry to the list
-            all_entries.append(pose_sequence)
+            try:
+                pose_sequence = get_keypoints(
+                    model=model,
+                    vid_path=vid_path,
+                    gesture_id=gesture_id
+                )
+                # append each video entry to the list
+                batch_entries.append(pose_sequence)
+            except Exception as e:
+                print(f"An error occurred while getting keypoints: {e}")
 
             # save the data to json for later use
-            with open(output_json, "w") as f:
-                json.dump(all_entries, f, indent=2)
-
-            print(f"Added {vid_path} to {output_json}\n")
-            videos_done += 1
+            batch_size = 50
+            if batch_size < len(batch_entries):
+                with open(output_json, "a", encoding="utf-8") as f:
+                    for entry in batch_entries:
+                        f.write(json.dumps(entry, ensure_ascii=False) + '\n')
+                videos_done += batch_size
+                print(f"videos_done: {videos_done}")
+                batch_entries = []
 
             percent_done = videos_done/num_videos
-            print(f"Percentage: {percent_done * 100:.2f}%")
+            print(f"videos done: {videos_done}, num videos: {num_videos}, Percentage: {percent_done * 100:.2f}%")
 
     print("All pose data saved.")
     print(f"Total time: {time.time() - start_time:.2f} seconds")
