@@ -104,3 +104,18 @@ venv.bak/
 .mypy_cache/
 
 Images/
+runs/pose/predict/dance.mp4
+runs/pose/.DS_Store
+runs/.DS_Store
+data/train.pkl
+data/val.pkl
+.DS_Store
+.idea/human-pose-estimation-opencv.iml
+.idea/inspectionProfiles/profiles_settings.xml
+.idea/misc.xml
+result.jpg
+yolo11n-pose.pt
+yolo11n.pt
+.idea/vcs.xml
+.idea/modules.xml
+checkpoints/best_lstm.pt
