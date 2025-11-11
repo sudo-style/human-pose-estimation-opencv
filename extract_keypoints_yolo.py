@@ -62,8 +62,6 @@ def main():
     # output JSON file
     output_json = Path("pose_data.jsonl")
 
-    videos_done = 0
-
     # find the number of videos
     num_videos = sum(
         len([vid for vid in os.listdir(os.path.join(folder_path, gesture_name)) if vid != '.DS_Store'])
@@ -74,9 +72,14 @@ def main():
 
     # load existing data if file already exists
     if output_json.exists():
-        with open(output_json, "r") as f:
-            all_entries = json.load(f)
-    else: all_entries = []
+        with open("pose_data.jsonl") as f:
+            saved_entries = [json.loads(line) for line in f if line.strip()]
+    else: saved_entries = []
+    videos_done = len(saved_entries)
+
+    # saved paths, we will skip if already exists
+    saved_paths = [entry['vid_path'] for entry in saved_entries]
+    print(saved_paths)
 
     for gesture_id, gesture in enumerate(gesture_names):
         gesture_path = os.path.join(folder_path, gesture)
@@ -86,6 +89,8 @@ def main():
             vid_path = os.path.join(gesture_path, vid)
             print(f"Processing: gesture={gesture}, video={vid}")
 
+            if vid_path in saved_paths:
+                continue
             try:
                 pose_sequence = get_keypoints(
                     model=model,
@@ -98,7 +103,7 @@ def main():
                 print(f"An error occurred while getting keypoints: {e}")
 
             # save the data to json for later use
-            batch_size = 50
+            batch_size = 10
             if batch_size < len(batch_entries):
                 with open(output_json, "a", encoding="utf-8") as f:
                     for entry in batch_entries:
